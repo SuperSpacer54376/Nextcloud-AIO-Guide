@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nextcloud AIO + Tailscale Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #181c27;
+    --card2: #1e2333;
+    --border: #2a2f42;
+    --border2: #353b52;
+    --nc: #0082c9;
+    --nc-lit: #2ba3e8;
+    --ts: #6c47ff;
+    --ts-lit: #9b7eff;
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.1);
+    --green-border: rgba(34,197,94,0.25);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245,158,11,0.1);
+    --amber-border: rgba(245,158,11,0.25);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.1);
+    --red-border: rgba(239,68,68,0.25);
+    --blue-bg: rgba(0,130,201,0.1);
+    --blue-border: rgba(0,130,201,0.25);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --dim: #64748b;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+
+  /* Subtle dot grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 48px 20px 80px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Header ── */
+  .header {
+    margin-bottom: 52px;
+    animation: fadeIn 0.5s ease both;
+  }
+
+  .header-tags {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+  }
+  .tag-nc  { background: rgba(0,130,201,0.15); color: var(--nc-lit); border: 1px solid rgba(0,130,201,0.3); }
+  .tag-ts  { background: rgba(108,71,255,0.15); color: var(--ts-lit); border: 1px solid rgba(108,71,255,0.3); }
+  .tag-dok { background: rgba(13,183,237,0.12); color: #38bdf8; border: 1px solid rgba(13,183,237,0.25); }
+
+  h1 {
+    font-size: clamp(26px, 4.5vw, 40px);
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.8px;
+    margin-bottom: 12px;
+    color: #f1f5f9;
+  }
+
+  .header-sub {
+    color: var(--muted);
+    font-size: 15px;
+    max-width: 560px;
+    line-height: 1.7;
+  }
+
+  .source-credit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    text-decoration: none;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .source-credit:hover { color: var(--muted); border-color: var(--border2); }
+
+  /* ── Prereq box ── */
+  .prereq {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 44px;
+    animation: fadeIn 0.5s ease 0.1s both;
+  }
+
+  .prereq-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 12px;
+  }
+
+  .prereq-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 6px 16px;
+  }
+
+  .prereq-grid li {
+    list-style: none;
+    font-size: 13.5px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .prereq-grid li::before {
+    content: '✓';
+    font-family: var(--mono);
+    color: var(--green);
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  /* ── Step list ── */
+  .steps { display: flex; flex-direction: column; gap: 20px; }
+
+  .step {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .step:hover { border-color: var(--border2); }
+
+  .step-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 22px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .step-num {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .n-ts  { background: rgba(108,71,255,0.18); color: var(--ts-lit); border: 1px solid rgba(108,71,255,0.3); }
+  .n-nc  { background: rgba(0,130,201,0.18); color: var(--nc-lit); border: 1px solid rgba(0,130,201,0.3); }
+  .n-ok  { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .n-dok { background: rgba(13,183,237,0.13); color: #38bdf8; border: 1px solid rgba(13,183,237,0.25); }
+
+  .step-info { flex: 1 }
+
+  .step-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.2px;
+  }
+
+  .step-hint {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--dim);
+    margin-top: 1px;
+  }
+
+  .chevron {
+    color: var(--dim);
+    font-size: 16px;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .step.open .chevron { transform: rotate(90deg); }
+
+  .step-body {
+    display: none;
+    padding: 2px 22px 22px;
+  }
+  .step.open .step-body { display: block; }
+
+  .step-desc {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.75;
+    padding-top: 2px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 18px;
+  }
+
+  /* ── Sub-steps ── */
+  .sub {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+
+  .sub-icon { font-size: 18px; flex-shrink: 0; padding-top: 1px; line-height: 1; }
+  .sub-body { flex: 1; min-width: 0; }
+  .sub-title { font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 4px; }
+  .sub-text  { font-size: 13px; color: var(--muted); line-height: 1.65; margin-bottom: 8px; }
+  .sub-text:last-child { margin-bottom: 0; }
+
+  /* ── Code blocks ── */
+  .code {
+    position: relative;
+    background: #0a0d14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    padding-right: 52px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: #7dd3fc;
+    white-space: pre;
+    overflow-x: auto;
+    margin-top: 8px;
+    tab-size: 2;
+  }
+
+  .code .c  { color: #475569; } /* comment */
+  .code .k  { color: #f472b6; } /* keyword / flag */
+  .code .v  { color: #86efac; } /* value */
+  .code .p  { color: #fcd34d; } /* property */
+  .code .s  { color: #a5f3fc; } /* string */
+
+  .copy {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--card2);
+    border: 1px solid var(--border2);
+    color: var(--dim);
+    border-radius: 5px;
+    padding: 2px 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .copy:hover { color: var(--text); border-color: #4a5568; }
+  .copy.ok { color: var(--green); border-color: var(--green-border); }
+
+  /* ── Notes ── */
+  .note {
+    display: flex;
+    gap: 9px;
+    padding: 10px 13px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.65;
+    margin-top: 10px;
+  }
+  .note code {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    background: rgba(255,255,255,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .note-i { color: var(--muted); }
+  .note.info    { background: var(--blue-bg); border: 1px solid var(--blue-border); color: #7dd3fc; }
+  .note.warn    { background: var(--amber-bg); border: 1px solid var(--amber-border); color: #fcd34d; }
+  .note.success { background: var(--green-bg); border: 1px solid var(--green-border); color: #86efac; }
+  .note.danger  { background: var(--red-bg); border: 1px solid var(--red-border); color: #fca5a5; }
+
+  /* ── Divider inside step ── */
+  .sdiv {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+
+  /* ── Win/Mac/Linux tabs ── */
+  .os-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  .os-tab {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .os-tab.active { background: var(--card2); color: var(--text); border-color: var(--border2); }
+  .os-content { display: none; }
+  .os-content.active { display: block; }
+
+  /* ── Final callout ── */
+  .done-box {
+    margin-top: 44px;
+    background: linear-gradient(135deg, rgba(0,130,201,0.1) 0%, rgba(108,71,255,0.12) 100%);
+    border: 1px solid rgba(108,71,255,0.3);
+    border-radius: 16px;
+    padding: 32px 28px;
+    text-align: center;
+  }
+
+  .done-box h2 { font-size: 21px; font-weight: 800; color: #f1f5f9; margin-bottom: 8px; }
+  .done-box p  { color: var(--muted); font-size: 14px; max-width: 450px; margin: 0 auto 18px; line-height: 1.7; }
+
+  .done-url {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    background: var(--card);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 9px 20px;
+    color: var(--ts-lit);
+    letter-spacing: -0.2px;
+  }
+
+  /* ── Troubleshoot section ── */
+  .trouble {
+    margin-top: 36px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .trouble-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 22px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .trouble-head h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--amber);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .trouble-body {
+    display: none;
+    padding: 0 22px 22px;
+  }
+  .trouble.open .trouble-body { display: block; }
+  .trouble.open .chevron { transform: rotate(90deg); }
+
+  .t-row {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .t-row:last-child { border-bottom: none; }
+  .t-prob { color: #fca5a5; min-width: 220px; font-weight: 500; }
+  .t-fix  { color: var(--muted); flex: 1; }
+  .t-fix code {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    background: rgba(255,255,255,0.07);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #a5f3fc;
+  }
+
+  /* Animations */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .step:nth-child(1) { animation: fadeIn 0.4s ease 0.05s both; }
+  .step:nth-child(2) { animation: fadeIn 0.4s ease 0.1s both; }
+  .step:nth-child(3) { animation: fadeIn 0.4s ease 0.15s both; }
+  .step:nth-child(4) { animation: fadeIn 0.4s ease 0.2s both; }
+  .step:nth-child(5) { animation: fadeIn 0.4s ease 0.25s both; }
+  .step:nth-child(6) { animation: fadeIn 0.4s ease 0.3s both; }
+
+  @media (max-width: 580px) {
+    .page { padding: 28px 14px 60px; }
+    .step-head { padding: 14px 16px; }
+    .step-body { padding: 2px 16px 18px; }
+    .t-row { flex-direction: column; gap: 4px; }
+    .t-prob { min-width: unset; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-tags">
+      <span class="tag tag-nc">☁ Nextcloud AIO</span>
+      <span class="tag tag-dok">🐳 Docker Desktop</span>
+      <span class="tag tag-ts">🔒 Tailscale Serve</span>
+    </div>
+    <h1>Nextcloud AIO on Docker<br>with Tailscale Serve</h1>
+    <p class="header-sub">A simple, no-port-forwarding guide to self-host Nextcloud All-in-One using Tailscale as a reverse proxy — no domain purchase required, no VPS needed.</p>
+    <a href="https://github.com/nextcloud/all-in-one/discussions/6817" class="source-credit" target="_blank">
+      📎 Based on official guide: nextcloud/all-in-one #6817
+    </a>
+  </div>
+
+  <!-- Prerequisites -->
+  <div class="prereq">
+    <div class="prereq-title">⚡ You'll need these first</div>
+    <ul class="prereq-grid">
+      <li>Docker Desktop installed</li>
+      <li>Tailscale account (free)</li>
+      <li>Tailscale app on your PC</li>
+      <li>Windows, macOS, or Linux</li>
+      <li>~10 GB free disk space</li>
+      <li>Terminal / PowerShell</li>
+    </ul>
+  </div>
+
+  <div class="steps">
+
+    <!-- STEP 1: Tailscale account setup -->
+    <div class="step open">
+      <div class="step-head" onclick="toggle(this)">
+        <div class="step-num n-ts">01</div>
+        <div class="step-info">
+          <div class="step-name">Configure your Tailscale account</div>
+          <div class="step-hint">login.tailscale.com → DNS tab</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">
+          Before touching Docker, you need two settings turned on in your Tailscale admin panel. Both are free. This is what gives you a proper HTTPS domain like <span style="color:var(--ts-lit);font-family:var(--mono);font-size:13px">mypc.tail1234.ts.net</span>.
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">🌐</div>
+          <div class="sub-body">
+            <div class="sub-title">Step 1a — Enable MagicDNS</div>
+            <div class="sub-text">Go to <strong style="color:#f1f5f9">login.tailscale.com → DNS tab</strong>. Find "MagicDNS" and turn it on. This gives each of your devices a stable hostname like <span style="font-family:var(--mono);color:var(--ts-lit);font-size:12px">mypc.tail1234.ts.net</span>.</div>
+          </div>
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">🔐</div>
+          <div class="sub-body">
+            <div class="sub-title">Step 1b — Enable HTTPS Certificates</div>
+            <div class="sub-text">On the same DNS tab, find "HTTPS Certificates" and enable it. This lets Tailscale auto-issue a valid TLS cert for your machine — so you get a real padlock 🔒 in the browser, no manual cert setup needed.</div>
+          </div>
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">📋</div>
+          <div class="sub-body">
+            <div class="sub-title">Step 1c — Note your machine hostname</div>
+            <div class="sub-text">In the terminal on your server, run this to see your Tailscale hostname. You'll need it later.</div>
+            <div class="code"><button class="copy" onclick="cp(this)">copy</button><span class="k">tailscale</span> status</div>
+            <div class="sub-text" style="margin-top:8px;">Look for your machine's entry — the domain looks like <span style="font-family:var(--mono);font-size:12px;color:var(--ts-lit)">mypc.tail1234.ts.net</span>. Write it down.</div>
+          </div>
+        </div>
+
+        <div class="note info"><span>ℹ️</span>&nbsp; Make sure Tailscale is installed and logged in on your server machine before continuing.</div>
+      </div>
+    </div>
+
+    <!-- STEP 2: Run Tailscale serve FIRST -->
+    <div class="step open">
+      <div class="step-head" onclick="toggle(this)">
+        <div class="step-num n-ts">02</div>
+        <div class="step-info">
+          <div class="step-name">Run Tailscale Serve — BEFORE installing Nextcloud</div>
+          <div class="step-hint">⚠️ Critical order: serve must run first</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">
+          This is the most important step most guides get wrong. You must run <code style="font-family:var(--mono);font-size:12px;color:var(--ts-lit)">tailscale serve</code> <strong>before</strong> you enter your domain in the Nextcloud wizard — otherwise Nextcloud's domain validation will fail because it can't reach port 443.
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">▶️</div>
+          <div class="sub-body">
+            <div class="sub-title">Run this command in your terminal</div>
+            <div class="sub-text">This tells Tailscale: "take HTTPS traffic coming to my machine and forward it to port 11000 (where Nextcloud's Apache will run)."</div>
+            <div class="os-tabs">
+              <button class="os-tab active" onclick="switchOS(this,'mac')">macOS / Linux</button>
+              <button class="os-tab" onclick="switchOS(this,'win')">Windows</button>
+            </div>
+            <div class="os-content active" id="os-mac">
+              <div class="code"><button class="copy" onclick="cp(this)">copy</button><span class="k">tailscale</span> serve <span class="v">--bg</span> http://127.0.0.1:11000</div>
+            </div>
+            <div class="os-content" id="os-win">
+              <div class="code"><button class="copy" onclick="cp(this)">copy</button><span class="c"># Run in PowerShell as Administrator</span>
+<span class="k">tailscale</span> serve <span class="v">--bg</span> http://localhost:11000</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">✅</div>
+          <div class="sub-body">
+            <div class="sub-title">Verify it's working</div>
+            <div class="sub-text">Confirm Tailscale is proxying correctly:</div>
+            <div class="code"><button class="copy" onclick="cp(this)">copy</button><span class="k">tailscale</span> serve status</div>
+            <div class="sub-text" style="margin-top:8px;">You should see something like: <span style="font-family:var(--mono);font-size:12px;color:#86efac">https://mypc.tail1234.ts.net → http://127.0.0.1:11000</span></div>
+          </div>
+        </div>
+
+        <div class="note warn"><span>⚠️</span>&nbsp; The <code>--bg</code> flag runs it in the background. On Linux/systemd servers, see the optional systemd service setup in the Troubleshooting section to make this survive reboots.</div>
+      </div>
+    </div>
+
+    <!-- STEP 3: Create compose file -->
+    <div class="step open">
+      <div class="step-head" onclick="toggle(this)">
+        <div class="step-num n-dok">03</div>
+        <div class="step-info">
+          <div class="step-name">Create your docker-compose.yaml</div>
+          <div class="step-hint">based on the official Nextcloud AIO compose file</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">
+          Create a folder for your Nextcloud setup, then create a <code style="font-family:var(--mono);font-size:12px;color:var(--nc-lit)">compose.yaml</code> file inside it. The key additions vs the default are the DNS resolvers and the two Apache environment variables.
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">📁</div>
+          <div class="sub-body">
+            <div class="sub-title">Create your project folder</div>
+            <div class="code"><button class="copy" onclick="cp(this)">copy</button><span class="c"># Pick any directory you like</span>
+<span class="k">mkdir</span> ~/nextcloud && <span class="k">cd</span> ~/nextcloud</div>
+          </div>
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">📄</div>
+          <div class="sub-body">
+            <div class="sub-title">Create compose.yaml with these contents</div>
+            <div class="sub-text">Copy the official AIO compose file, then make these specific changes (shown with + lines):</div>
+            <div class="code"><button class="copy" onclick="cp(this)">copy</button>services:
+  nextcloud-aio-mastercontainer:
+    image: <span class="s">ghcr.io/nextcloud-releases/all-in-one:latest</span>
+    init: <span class="v">true</span>
+    restart: <span class="v">always</span>
+    container_name: <span class="s">nextcloud-aio-mastercontainer</span>
+    volumes:
+      - <span class="s">nextcloud_aio_mastercontainer:/mnt/docker-aio-config</span>
+      - <span class="s">/var/run/docker.sock:/var/run/docker.sock:ro</span>
+    ports:
+      - <span class="v">8080:8080</span>   <span class="c"># AIO management interface</span>
+      <span class="c"># Comment out or remove these two lines:</span>
+      <span class="c"># - 80:80</span>
+      <span class="c"># - 8443:8443</span>
+
+    <span class="c"># ✅ Add these DNS resolvers (fixes domain validation)</span>
+    dns:
+      - <span class="v">100.100.100.100</span>  <span class="c"># Tailscale Magic DNS</span>
+      - <span class="v">1.1.1.1</span>          <span class="c"># Fallback DNS</span>
+
+    environment:
+      <span class="c"># ✅ Uncomment and set these two lines:</span>
+      <span class="p">APACHE_PORT</span>: <span class="v">11000</span>
+      <span class="p">APACHE_IP_BINDING</span>: <span class="v">127.0.0.1</span>
+
+volumes:
+  nextcloud_aio_mastercontainer:
+    name: <span class="s">nextcloud_aio_mastercontainer</span></div>
+          </div>
+        </div>
+
+        <div class="note info"><span>ℹ️</span>&nbsp; The full official compose.yaml is at: <span style="font-family:var(--mono);font-size:11.5px">github.com/nextcloud/all-in-one/blob/main/compose.yaml</span> — start from that and make the changes shown above.</div>
+        <div class="note warn"><span>⚠️</span>&nbsp; <strong>Windows users:</strong> change <code>/var/run/docker.sock:/var/run/docker.sock:ro</code> to <code>//var/run/docker.sock:/var/run/docker.sock:ro</code></div>
+      </div>
+    </div>
+
+    <!-- STEP 4: Start the container -->
+    <div class="step open">
+      <div class="step-head" onclick="toggle(this)">
+        <div class="step-num n-dok">04</div>
+        <div class="step-info">
+          <div class="step-name">Start the Nextcloud AIO container</div>
+          <div class="step-hint">docker compose up -d</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">With your compose.yaml saved, start the master container. This pulls the image and starts the AIO management interface.</div>
+
+        <div class="sub">
+          <div class="sub-icon">🐳</div>
+          <div class="sub-body">
+            <div class="sub-title">Start the container</div>
+            <div class="sub-text">From inside your nextcloud folder:</div>
+            <div class="code"><button class="copy" onclick="cp(this)">copy</button><span class="k">docker compose</span> up <span class="v">-d</span></div>
+          </div>
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">👀</div>
+          <div class="sub-body">
+            <div class="sub-title">Check it's running</div>
+            <div class="code"><button class="copy" onclick="cp(this)">copy</button><span class="k">docker ps</span></div>
+            <div class="sub-text" style="margin-top:8px;">You should see <span style="font-family:var(--mono);font-size:12px;color:#86efac">nextcloud-aio-mastercontainer</span> with status <span style="font-family:var(--mono);font-size:12px;color:#86efac">(healthy)</span>.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5: Setup Wizard -->
+    <div class="step open">
+      <div class="step-head" onclick="toggle(this)">
+        <div class="step-num n-nc">05</div>
+        <div class="step-info">
+          <div class="step-name">Run the Nextcloud setup wizard</div>
+          <div class="step-hint">open https://localhost:8080 from your browser</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">The AIO management interface walks you through the full Nextcloud setup. You'll enter your Tailscale domain here — the one you noted in Step 1.</div>
+
+        <div class="sub">
+          <div class="sub-icon">🌐</div>
+          <div class="sub-body">
+            <div class="sub-title">Open the AIO interface</div>
+            <div class="sub-text">In your browser, navigate to:</div>
+            <div class="code"><button class="copy" onclick="cp(this)">copy</button>https://localhost:8080</div>
+            <div class="sub-text" style="margin-top:8px;">You'll get a self-signed cert warning. Click <strong>Advanced → Proceed</strong> (or equivalent in your browser). This is expected.</div>
+          </div>
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">🔑</div>
+          <div class="sub-body">
+            <div class="sub-title">Copy the one-time passphrase</div>
+            <div class="sub-text">The page shows a one-time passphrase. <strong style="color:#f1f5f9">Copy it and store it somewhere safe</strong> — you'll need it to log in and you only see it once.</div>
+          </div>
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">🌍</div>
+          <div class="sub-body">
+            <div class="sub-title">Enter your Tailscale domain as the domain</div>
+            <div class="sub-text">When asked for a domain, enter your Tailscale hostname from Step 1. Format: just the bare domain, no https://, no trailing slash.</div>
+            <div class="code"><button class="copy" onclick="cp(this)">copy</button><span class="c"># Example — replace with your actual hostname</span>
+mypc.tail1234.ts.net</div>
+            <div class="sub-text" style="margin-top:8px;">Click Submit. Because you ran <code style="font-family:var(--mono);font-size:12px">tailscale serve</code> in Step 2, the domain check should pass ✅</div>
+          </div>
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">📦</div>
+          <div class="sub-body">
+            <div class="sub-title">Select containers and start Nextcloud</div>
+            <div class="sub-text">Choose which optional containers you want (e.g. Collabora for Office, Talk for video calls), set your timezone and backup location, then click <strong style="color:#f1f5f9">"Download and start containers"</strong>. This takes a few minutes.</div>
+          </div>
+        </div>
+
+        <div class="note warn"><span>⚠️</span>&nbsp; Want a custom Tailscale domain name? <strong>Change it before this step</strong> by going to DNS tab → "Rename Tailnet". Changing it after will break things and require a full reinstall.</div>
+      </div>
+    </div>
+
+    <!-- STEP 6: Access -->
+    <div class="step open">
+      <div class="step-head" onclick="toggle(this)">
+        <div class="step-num n-ok">06</div>
+        <div class="step-info">
+          <div class="step-name">Access your Nextcloud!</div>
+          <div class="step-hint">you're done 🎉</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">Once all containers turn green in the AIO panel, your private Nextcloud is ready. Access it from any device running Tailscale.</div>
+
+        <div class="sub">
+          <div class="sub-icon">🚀</div>
+          <div class="sub-body">
+            <div class="sub-title">Open Nextcloud in your browser</div>
+            <div class="sub-text">From any device on your Tailscale network:</div>
+            <div class="code"><button class="copy" onclick="cp(this)">copy</button><span class="c"># Replace with your actual domain</span>
+https://mypc.tail1234.ts.net</div>
+            <div class="sub-text" style="margin-top:8px;">You should see the Nextcloud login screen with a valid 🔒 padlock. Create your admin account.</div>
+          </div>
+        </div>
+
+        <div class="sub">
+          <div class="sub-icon">📱</div>
+          <div class="sub-body">
+            <div class="sub-title">Connect mobile & desktop apps</div>
+            <div class="sub-text">Install the official Nextcloud app on your phone or other computers. When asked for server URL, enter your Tailscale hostname. Make sure Tailscale is running on that device too.</div>
+          </div>
+        </div>
+
+        <div class="note success"><span>✅</span>&nbsp; Your Nextcloud is private — only accessible from devices on your Tailscale network. No ports open to the internet. No VPN server to manage.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Done box -->
+  <div class="done-box">
+    <h2>🎉 Your private cloud is live</h2>
+    <p>Fully encrypted, accessible only to your Tailscale devices. No public IP, no port forwarding, no domain purchase needed.</p>
+    <div class="done-url">https://mypc.tail1234.ts.net</div>
+  </div>
+
+  <!-- Troubleshooting -->
+  <div class="trouble open" style="margin-top:36px">
+    <div class="trouble-head" onclick="toggleTrouble(this)">
+      <h3>🔧 Troubleshooting common issues</h3>
+      <span class="chevron">›</span>
+    </div>
+    <div class="trouble-body">
+
+      <div class="t-row">
+        <div class="t-prob">Domain validation fails</div>
+        <div class="t-fix">Make sure you ran <code>tailscale serve --bg http://127.0.0.1:11000</code> <strong>before</strong> entering the domain in the wizard. Also confirm the <code>dns:</code> section is in your compose.yaml.</div>
+      </div>
+
+      <div class="t-row">
+        <div class="t-prob">Port 443 not reachable error</div>
+        <div class="t-fix">Comment out the <code>80:80</code> and <code>8443:8443</code> lines in your compose.yaml ports section. Another service may be using those ports. Also try setting <code>APACHE_IP_BINDING: 0.0.0.0</code> as a last resort.</div>
+      </div>
+
+      <div class="t-row">
+        <div class="t-prob">DNS config not set error</div>
+        <div class="t-fix">Add the <code>dns:</code> block to your compose.yaml (see Step 3) with <code>100.100.100.100</code> as the first entry. Make sure MagicDNS is enabled in your Tailscale admin.</div>
+      </div>
+
+      <div class="t-row">
+        <div class="t-prob">Still can't pass domain check</div>
+        <div class="t-fix">Last resort: add <code>SKIP_DOMAIN_VALIDATION: true</code> to your environment section. Only use this after confirming everything else is correctly configured (tailscale serve running, DNS set up).</div>
+      </div>
+
+      <div class="t-row">
+        <div class="t-prob">Collabora / Office not working</div>
+        <div class="t-fix">Comment out ports <code>80:80</code> and <code>8443:8443</code> from the compose ports section. These conflict with how Collabora's CODE container works.</div>
+      </div>
+
+      <div class="t-row">
+        <div class="t-prob">tailscale serve doesn't survive reboots</div>
+        <div class="t-fix">Create a systemd service. Save this to <code>/etc/systemd/system/tailscale-nextcloud.service</code> and run <code>systemctl enable --now tailscale-nextcloud</code>:<br><br>
+          <code>[Unit]<br>Description=Tailscale serve for Nextcloud<br>After=network.target<br><br>[Service]<br>ExecStart=tailscale serve http://127.0.0.1:11000<br>Type=simple<br><br>[Install]<br>WantedBy=multi-user.target</code>
+        </div>
+      </div>
+
+      <div class="t-row">
+        <div class="t-prob">General debugging commands</div>
+        <div class="t-fix">
+          <code>docker logs nextcloud-aio-mastercontainer</code> — check container logs<br>
+          <code>tailscale serve status</code> — verify serve is active<br>
+          <code>tailscale status</code> — check tailnet connectivity<br>
+          <code>curl -vk https://mypc.tail1234.ts.net</code> — test HTTPS from the server
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggle(head) {
+  head.parentElement.classList.toggle('open');
+}
+
+function toggleTrouble(head) {
+  head.parentElement.classList.toggle('open');
+}
+
+function switchOS(btn, os) {
+  const parent = btn.closest('.sub-body');
+  parent.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
+  parent.querySelectorAll('.os-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  parent.querySelector('#os-' + os).classList.add('active');
+}
+
+function cp(btn) {
+  const block = btn.parentElement;
+  const raw = block.innerText.replace(/^copy|^copied/,'').trim();
+  // Strip inline comment lines for cleaner copy
+  const clean = raw.split('\n').map(l => l.replace(/\s*#[^\n]*$/,'')).join('\n').trim();
+  navigator.clipboard.writeText(clean).then(() => {
+    btn.textContent = 'copied ✓';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('ok'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>
